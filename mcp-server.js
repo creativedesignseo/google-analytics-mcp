@@ -77,6 +77,43 @@ const tools = {
             
             return { rows, totalUsers: rows.reduce((sum, r) => sum + parseInt(r.activeUsers || 0), 0) };
         } catch (e) { return { error: e.message }; }
+    },
+
+    // Crear Propiedad + Data Stream
+    async createPropertySetup(accountId, domain, displayName, timezone = 'Europe/Madrid', currency = 'EUR') {
+        try {
+            // 1. Crear Propiedad
+            const [property] = await adminClient.createProperty({
+                property: {
+                    parent: accountId,
+                    displayName: displayName || domain,
+                    industryCategory: 'TRAVEL',
+                    timeZone: timezone,
+                    currencyCode: currency
+                }
+            });
+
+            // 2. Crear Data Stream
+            const [dataStream] = await adminClient.createDataStream({
+                parent: property.name,
+                dataStream: {
+                    type: 'WEB_DATA_STREAM',
+                    displayName: `Web - ${domain}`,
+                    webStreamData: { defaultUri: `https://${domain}` }
+                }
+            });
+
+            return {
+                success: true,
+                propertyName: property.displayName,
+                propertyId: property.name.split('/')[1],
+                measurementId: dataStream.webStreamData.measurementId,
+                streamId: dataStream.name,
+                setupUrl: `https://analytics.google.com/analytics/web/#/p${property.name.split('/')[1]}/admin/streams/table`
+            };
+        } catch (e) {
+            return { error: e.message };
+        }
     }
 };
 
@@ -96,13 +133,7 @@ function sendError(id, code, message) {
 rl.on('line', async (line) => {
     try {
         const req = JSON.parse(line);
-        
-        // Handle notifications (no id = notification, no response needed)
-        if (!req.id && req.method) {
-            // notifications/initialized, etc. - just acknowledge silently
-            return;
-        }
-
+        if (!req.id && req.method) return;
         let res;
 
         switch (req.method) {
@@ -110,66 +141,45 @@ rl.on('line', async (line) => {
                 res = { 
                     protocolVersion: '2024-11-05', 
                     capabilities: { tools: {} }, 
-                    serverInfo: { name: 'google-analytics-mcp', version: '1.0.0' } 
+                    serverInfo: { name: 'google-analytics-mcp', version: '1.1.0' } 
                 };
                 break;
                 
             case 'tools/list':
                 res = {
                     tools: [
-                        { name: 'list_accounts', description: 'Lista todas las cuentas de Google Analytics a las que tienes acceso', inputSchema: { type: 'object', properties: {} } },
-                        { name: 'list_properties', description: 'Lista las propiedades (sitios web) de una cuenta', inputSchema: { type: 'object', properties: { account_name: { type: 'string', description: 'Nombre de la cuenta (ej: accounts/123456)' } }, required: ['account_name'] } },
-                        { name: 'run_report', description: 'Ejecuta un reporte de Analytics con métricas y dimensiones', inputSchema: { type: 'object', properties: { property_id: { type: 'string', description: 'ID de la propiedad (ej: 123456789)' }, start_date: { type: 'string' }, end_date: { type: 'string' }, metrics: { type: 'array', items: { type: 'string' } }, dimensions: { type: 'array', items: { type: 'string' } } }, required: ['property_id'] } },
-                        { name: 'run_realtime_report', description: 'Muestra usuarios activos AHORA MISMO en tu sitio', inputSchema: { type: 'object', properties: { property_id: { type: 'string', description: 'ID de la propiedad' } }, required: ['property_id'] } }
+                        { name: 'list_accounts', description: 'Lista todas las cuentas de Google Analytics disponibles', inputSchema: { type: 'object', properties: {} } },
+                        { name: 'list_properties', description: 'Lista las propiedades de una cuenta específica', inputSchema: { type: 'object', properties: { account_name: { type: 'string', description: 'ID de la cuenta (ej: accounts/123456)' } }, required: ['account_name'] } },
+                        { name: 'create_property_setup', description: 'Crea una nueva propiedad GA4 + Flujo de datos Web', inputSchema: { type: 'object', properties: { account_id: { type: 'string', description: 'ID de la cuenta padre (ej: accounts/123456)' }, domain: { type: 'string', description: 'Dominio del sitio web (ej: ejemplo.com)' }, display_name: { type: 'string', description: 'Nombre visible de la propiedad' } }, required: ['account_id', 'domain'] } },
+                        { name: 'run_report', description: 'Ejecuta un reporte histórico personalizado', inputSchema: { type: 'object', properties: { property_id: { type: 'string' }, start_date: { type: 'string' }, end_date: { type: 'string' }, metrics: { type: 'array', items: { type: 'string' } }, dimensions: { type: 'array', items: { type: 'string' } } }, required: ['property_id'] } },
+                        { name: 'run_realtime_report', description: 'Muestra usuarios en tiempo real', inputSchema: { type: 'object', properties: { property_id: { type: 'string' } }, required: ['property_id'] } }
                     ]
                 };
                 break;
                 
             case 'tools/call':
                 const args = req.params?.arguments || {};
-                const toolName = req.params?.name;
-                
                 try {
                     let result;
-                    switch (toolName) {
-                        case 'list_accounts': 
-                            result = await tools.listAccounts();
-                            break;
-                        case 'list_properties': 
-                            result = await tools.listProperties(args.account_name);
-                            break;
-                        case 'run_report': 
-                            result = await tools.runReport(
-                                args.property_id, 
-                                args.start_date || '30daysAgo', 
-                                args.end_date || 'today',
-                                args.metrics || ['activeUsers'],
-                                args.dimensions || ['country']
-                            );
-                            break;
-                        case 'run_realtime_report': 
-                            result = await tools.runRealtimeReport(
-                                args.property_id,
-                                args.metrics || ['activeUsers'],
-                                args.dimensions || ['city']
-                            );
-                            break;
-                        default:
-                            result = { error: 'Herramienta no encontrada: ' + toolName };
+                    switch (req.params?.name) {
+                        case 'list_accounts': result = await tools.listAccounts(); break;
+                        case 'list_properties': result = await tools.listProperties(args.account_name); break;
+                        case 'create_property_setup': result = await tools.createPropertySetup(args.account_id, args.domain, args.display_name); break;
+                        case 'run_report': result = await tools.runReport(args.property_id, args.start_date, args.end_date, args.metrics, args.dimensions); break;
+                        case 'run_realtime_report': result = await tools.runRealtimeReport(args.property_id, args.metrics, args.dimensions); break;
+                        default: throw new Error('Herramienta desconocida');
                     }
                     res = { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-                } catch (toolError) {
-                    res = { content: [{ type: 'text', text: 'Error: ' + toolError.message }], isError: true };
+                } catch (err) {
+                    res = { content: [{ type: 'text', text: 'Error: ' + err.message }], isError: true };
                 }
                 break;
                 
             default:
-                sendError(req.id, -32601, 'Method not found: ' + req.method);
+                sendError(req.id, -32601, 'Method not found');
                 return;
         }
         
         sendResponse(req.id, res);
-    } catch (e) {
-        // Parse error - ignore malformed JSON
-    }
+    } catch (e) {}
 });
