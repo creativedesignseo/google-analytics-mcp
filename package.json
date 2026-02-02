@@ -1,0 +1,25 @@
+{
+  "name": "google-analytics-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server para Google Analytics 4 - Permite a agentes de IA consultar datos de Analytics",
+  "main": "mcp-server.js",
+  "scripts": {
+    "start": "node mcp-server.js",
+    "auth": "node get-refresh-token.js",
+    "test": "node test-connection.js"
+  },
+  "keywords": ["mcp", "google-analytics", "ga4", "ai", "claude", "antigravity"],
+  "author": "Jonathan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/USUARIO/google-analytics-mcp"
+  },
+  "dependencies": {
+    "@google-analytics/data": "latest",
+    "@google-analytics/admin": "latest",
+    "google-auth-library": "latest",
+    "js-yaml": "latest",
+    "open": "latest"
+  }
+}

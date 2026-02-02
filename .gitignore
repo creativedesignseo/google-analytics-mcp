@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Credentials (NEVER commit these)
+credentials.json
+google-analytics.yaml
+
+# Logs
+*.log
+error_log.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
