@@ -8,14 +8,16 @@ const { exec } = require('child_process');
 
 // Configuración base
 const configPath = path.join(__dirname, 'google-analytics.yaml');
+// RESTAURANDO CREDENCIALES REALES
 const CLIENT_ID = 'TU_CLIENT_ID';
 const CLIENT_SECRET = 'TU_CLIENT_SECRET';
 const REDIRECT_URI = 'http://localhost:3001/oauth2callback';
 
-// Scopes para Analytics
+// Scopes para Analytics - AÑADIDO 'analytics.edit'
 const SCOPES = [
     'https://www.googleapis.com/auth/analytics.readonly',
-    'https://www.googleapis.com/auth/analytics.manage.users.readonly'
+    'https://www.googleapis.com/auth/analytics.manage.users.readonly',
+    'https://www.googleapis.com/auth/analytics.edit' 
 ];
 
 const oauth2Client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
@@ -44,7 +46,7 @@ async function getRefreshToken() {
                 scope: SCOPES,
                 prompt: 'consent'
             });
-            console.log('🚀 Abriendo navegador para Google Analytics...\n');
+            console.log('🚀 Abriendo navegador para actualizar permisos (Edit Access)...\n');
             openBrowser(authUrl);
         });
     });
@@ -53,20 +55,22 @@ async function getRefreshToken() {
 (async () => {
     try {
         console.log("=".repeat(50));
-        console.log("  GOOGLE ANALYTICS - AUTH SETUP");
+        console.log("  GOOGLE ANALYTICS - UPDATE PERMISSIONS");
         console.log("=".repeat(50));
         
         const refreshToken = await getRefreshToken();
         
-        const config = {
-            client_id: CLIENT_ID,
-            client_secret: CLIENT_SECRET,
-            refresh_token: refreshToken,
-            property_id: 'TU_PROPERTY_ID_AQUI'
-        };
+        // Actualizar credentials.json
+        const credentialsPath = path.join(__dirname, 'credentials.json');
+        let credentials = {};
+        try {
+            credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+        } catch (e) {}
         
-        fs.writeFileSync(configPath, yaml.dump(config));
-        console.log("\n✅ Refresh Token obtenido y guardado en google-analytics.yaml");
+        credentials.refresh_token = refreshToken;
+        fs.writeFileSync(credentialsPath, JSON.stringify(credentials, null, 2));
+
+        console.log("\n✅ Nuevo Refresh Token con permisos de EDICIÓN guardado.");
         process.exit(0);
     } catch (e) {
         console.error("❌ Error:", e.message);

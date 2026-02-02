@@ -43,8 +43,11 @@ npm install
 Edita `get-refresh-token.js` con tu Client ID y Client Secret, luego:
 
 ```bash
+```bash
 node get-refresh-token.js
 ```
+
+> **Nota:** El script solicitará permisos de edición (`analytics.edit`) para permitir la creación de nuevas propiedades.
 
 Esto abrirá el navegador para autenticarte y generará `google-analytics.yaml`.
 
